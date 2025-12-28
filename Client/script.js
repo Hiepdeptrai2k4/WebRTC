@@ -2,53 +2,45 @@ const socket = io();
 let myName = "", peerName = "", pc = null, localStream = null;
 let statsInterval = null;
 
-// 1. KỸ THUẬT DATA STREAMING: Hàm phân tích chất lượng (QoS)
+// 1. THỐNG KÊ DATA STREAMING (Lấy số liệu Jitter, Bitrate, Codec cho báo cáo)
 async function getStreamingStats() {
     if (!pc) return;
     const stats = await pc.getStats();
     stats.forEach(report => {
-        // Lọc lấy luồng dữ liệu nhận về (Inbound)
         if (report.type === 'inbound-rtp' && (report.kind === 'video' || report.kind === 'audio')) {
-            
-            // Xử lý lỗi Codec undefined bằng cách tra cứu trong bảng stats
+            // Sửa lỗi Codec undefined bằng cách tra cứu trong stats
             const codec = stats.get(report.codecId);
-            const codecMime = codec ? codec.mimeType : 'Đang xác định...';
-
             console.warn(`--- THÔNG KÊ DATA STREAMING (${report.kind.toUpperCase()}) ---`);
-            console.log(`+ Codec sử dụng: ${codecMime}`); 
-            console.log(`+ Jitter (Độ trễ biến thiên): ${report.jitter ? report.jitter.toFixed(4) : 0}s`);
-            console.log(`+ Bitrate thực tế: ${Math.round(report.bytesReceived * 8 / 1024)} kbps`);
-            if (report.kind === 'video') {
-                console.log(`+ Khung hình (FPS): ${report.framesPerSecond || 0}`);
-            }
+            console.log(`+ Codec: ${codec ? codec.mimeType : 'Đang xác định...'}`); 
+            console.log(`+ Jitter: ${report.jitter ? report.jitter.toFixed(4) : 0}s`);
+            console.log(`+ Bitrate: ${Math.round(report.bytesReceived * 8 / 1024)} kbps`);
         }
     });
 }
 
-// 2. TÍNH HỆ THỐNG: Khởi tạo kết nối Peer-to-Peer
+// 2. KHỞI TẠO PEER CONNECTION (Tính hệ thống & NAT Traversal)
 function createPC() {
     pc = new RTCPeerConnection({
         iceServers: [
             { urls: "stun:35.232.138.176:3478" }, // STUN Server của bạn
-            { 
-                urls: "turn:35.232.138.176:3478", 
-                username: "user1", 
-                credential: "password123" 
-            }
+            { urls: "turn:35.232.138.176:3478", username: "user1", credential: "password123" }
         ]
     });
 
-    // NAT TRAVERSAL: Bằng chứng vượt NAT
     pc.onicecandidate = e => {
         if (e.candidate) {
-            console.log(`[ICE] Tìm thấy ứng viên loại: ${e.candidate.type} | IP: ${e.candidate.address}`);
+            console.log(`[ICE] Candidate: ${e.candidate.type}`);
             socket.emit("ice", { to: peerName, ice: e.candidate });
         }
     };
 
     pc.ontrack = e => {
         document.getElementById("remoteVideo").srcObject = e.streams[0];
-        // Bắt đầu đo đạc chất lượng Data Streaming sau khi có luồng Media
+        
+        // --- QUAN TRỌNG: HIỆN NÚT HANGUP KHI KẾT NỐI THÀNH CÔNG ---
+        const btn = document.getElementById("btnHangup");
+        if (btn) btn.style.display = "inline-block"; 
+        
         if (!statsInterval) statsInterval = setInterval(getStreamingStats, 2000);
     };
 
@@ -57,19 +49,48 @@ function createPC() {
     }
 }
 
-// 3. SƠ ĐỒ TIẾN DIỄN PHIÊN: Các hàm điều khiển cuộc gọi
+// 3. HÀM TẮT MÁY (Sửa lỗi nút không ẩn và giải phóng tài nguyên)
+function hangup(isRemote = false) {
+    console.log("=== KẾT THÚC PHIÊN TRUYỀN THÔNG ===");
+    
+    if (pc) {
+        pc.close();
+        pc = null;
+    }
+
+    if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+    }
+
+    // Xóa video và ẩn nút Hangup ngay lập tức
+    document.getElementById("localVideo").srcObject = null;
+    document.getElementById("remoteVideo").srcObject = null;
+    
+    const btn = document.getElementById("btnHangup");
+    if (btn) btn.style.display = "none";
+
+    clearInterval(statsInterval);
+    statsInterval = null;
+
+    if (!isRemote && peerName) {
+        socket.emit("hangup", peerName);
+    }
+    peerName = "";
+}
+
+// 4. LUỒNG BÁO HIỆU (Signaling) & KHUNG GIAO THỨC (SDP)
 async function callUser(to) {
     peerName = to;
     localStream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
     document.getElementById("localVideo").srcObject = localStream;
     createPC();
-
+    
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-
-    // MINH CHỨNG KHUNG GIAO THỨC SDP
+    
     console.warn("=== KHUNG GIAO THỨC (SDP OFFER) ===");
-    console.log(offer.sdp); 
+    console.log(offer.sdp);
 
     socket.emit("call", { to, offer });
 }
@@ -79,7 +100,7 @@ socket.on("incoming-call", async ({ from, offer }) => {
     localStream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
     document.getElementById("localVideo").srcObject = localStream;
     createPC();
-
+    
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -88,47 +109,21 @@ socket.on("incoming-call", async ({ from, offer }) => {
     console.log(answer.sdp);
 
     socket.emit("answer", { to: from, answer });
-});
+} );
 
-socket.on("answer", async ({ answer }) => {
-    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
-});
-
-socket.on("ice", async ({ ice }) => {
-    if (pc) await pc.addIceCandidate(new RTCIceCandidate(ice));
-});
-
-// 4. KẾT THÚC PHIÊN (Hangup)
-function hangup(isRemote = false) {
-    console.log("Kết thúc phiên truyền thông.");
-    if (pc) { pc.close(); pc = null; }
-    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-    
-    document.getElementById("remoteVideo").srcObject = null;
-    document.getElementById("localVideo").srcObject = null;
-    clearInterval(statsInterval);
-    statsInterval = null;
-
-    if (!isRemote) socket.emit("hangup", peerName);
-    peerName = "";
-}
-
+// Lắng nghe lệnh tắt máy từ người kia
 socket.on("hangup", () => hangup(true));
 
-// Logic Login và quản lý User
-function login() {
-    myName = document.getElementById("username").value;
-    if (myName) socket.emit("register", myName);
-}
-
+// Các hàm đăng ký và nhận diện user
+socket.on("answer", async ({ answer }) => { if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer)); });
+socket.on("ice", async ({ ice }) => { if (pc) await pc.addIceCandidate(new RTCIceCandidate(ice)); });
+function login() { myName = document.getElementById("username").value; socket.emit("register", myName); }
 socket.on("users", users => {
-    const div = document.getElementById("users");
-    div.innerHTML = "";
+    const div = document.getElementById("users"); div.innerHTML = "";
     users.forEach(u => {
         if (u === myName) return;
         const btn = document.createElement("button");
-        btn.innerText = `Call ${u}`;
-        btn.style.margin = "5px";
+        btn.innerText = `Gọi ${u}`;
         btn.onclick = () => callUser(u);
         div.appendChild(btn);
     });
