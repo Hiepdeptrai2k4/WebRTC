@@ -4,21 +4,27 @@
     <meta charset="utf-8">
     <title>WebRTC VoIP Report System</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f4f4f4; }
+        body { font-family: sans-serif; text-align: center; background: #f4f4f4; padding: 20px; }
         video { width: 45%; border: 2px solid #333; border-radius: 8px; background: #000; margin: 5px; }
-        #users button { margin: 5px; padding: 10px; cursor: pointer; }
+        #users button { margin: 5px; padding: 10px; cursor: pointer; background: #e1f5fe; border: 1px solid #01579b; }
+        .controls { margin-top: 20px; }
+        #btnHangup { padding: 10px 20px; background: #ff5252; color: white; border: none; border-radius: 5px; cursor: pointer; display: none; }
     </style>
 </head>
 <body>
     <h2>Hệ Thống Thực Nghiệm VoIP</h2>
     <input id="username" placeholder="Nhập tên của bạn">
-    <button onclick="login()">Đăng ký vào hệ thống</button>
+    <button onclick="login()">Đăng ký</button>
     
-    <div id="users"></div>
+    <div id="users" style="margin: 20px 0;"></div>
     
     <div>
         <video id="localVideo" autoplay muted playsinline></video>
         <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+
+    <div class="controls">
+        <button id="btnHangup" onclick="hangup()">Kết thúc cuộc gọi (Hangup)</button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>

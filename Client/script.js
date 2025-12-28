@@ -1,17 +1,18 @@
 const socket = io();
 let myName = "", peerName = "", pc = null, localStream = null;
+let statsInterval = null;
 
-// HÀM PHÂN TÍCH CHẤT LƯỢNG (Dành cho Yêu cầu 4 của cô giáo)
-async function getStats() {
+// PHÂN TÍCH CHẤT LƯỢNG (Khắc phục lỗi Codec undefined)
+async function getStreamingStats() {
     if (!pc) return;
     const stats = await pc.getStats();
     stats.forEach(report => {
-        if (report.type === 'inbound-rtp' && report.kind === 'video') {
-            console.warn("--- THỐNG KÊ DATA STREAMING ---");
-            console.log(`+ Codec: ${report.mimeType}`); 
-            console.log(`+ Jitter: ${report.jitter.toFixed(3)}s`);
+        if (report.type === 'inbound-rtp' && (report.kind === 'video' || report.kind === 'audio')) {
+            const codec = stats.get(report.codecId);
+            console.warn(`--- THÔNG KÊ DATA STREAMING (${report.kind.toUpperCase()}) ---`);
+            console.log(`+ Codec: ${codec ? codec.mimeType : 'Đang lấy dữ liệu...'}`); 
+            console.log(`+ Jitter: ${report.jitter ? report.jitter.toFixed(4) : 0}s`);
             console.log(`+ Bitrate: ${Math.round(report.bytesReceived * 8 / 1024)} kbps`);
-            console.log(`+ Khung hình (FPS): ${report.framesPerSecond || 0}`);
         }
     });
 }
@@ -25,19 +26,45 @@ function createPC() {
     });
 
     pc.onicecandidate = e => {
-        if (e.candidate) {
-            console.log(`[NAT Traversal] Candidate tìm thấy: ${e.candidate.type}`);
-            socket.emit("ice", { to: peerName, ice: e.candidate });
-        }
+        if (e.candidate) socket.emit("ice", { to: peerName, ice: e.candidate });
     };
 
     pc.ontrack = e => {
         document.getElementById("remoteVideo").srcObject = e.streams[0];
-        setInterval(getStats, 2000); // Tự động đo chất lượng mỗi 2 giây
+        document.getElementById("btnHangup").style.display = "inline-block";
+        statsInterval = setInterval(getStreamingStats, 2000);
     };
 
     localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 }
+
+// HÀM TẮT CUỘC GÓI (Hangup)
+function hangup(isRemote = false) {
+    console.log("KẾT THÚC PHIÊN TRUYỀN THÔNG");
+    
+    if (pc) {
+        pc.close();
+        pc = null;
+    }
+
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+
+    document.getElementById("localVideo").srcObject = null;
+    document.getElementById("remoteVideo").srcObject = null;
+    document.getElementById("btnHangup").style.display = "none";
+    clearInterval(statsInterval);
+
+    if (!isRemote) {
+        socket.emit("hangup", peerName);
+    }
+    peerName = "";
+}
+
+// Tín hiệu kết thúc từ phía bên kia
+socket.on("hangup", () => hangup(true));
 
 async function callUser(to) {
     peerName = to;
@@ -46,7 +73,6 @@ async function callUser(to) {
     createPC();
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    console.log("--- KHUNG GIAO THỨC (SDP OFFER) ---\n", offer.sdp);
     socket.emit("call", { to, offer });
 }
 
@@ -62,7 +88,7 @@ socket.on("incoming-call", async ({ from, offer }) => {
 });
 
 socket.on("answer", async ({ answer }) => {
-    await pc.setRemoteDescription(new RTCSessionDescription(answer));
+    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
 });
 
 socket.on("ice", async ({ ice }) => {
@@ -71,7 +97,7 @@ socket.on("ice", async ({ ice }) => {
 
 function login() {
     myName = document.getElementById("username").value;
-    socket.emit("register", myName);
+    if(myName) socket.emit("register", myName);
 }
 
 socket.on("users", users => {
