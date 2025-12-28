@@ -5,20 +5,22 @@ const socketIO = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
+const io = socketIO(server, { cors: { origin: "*" } });
 
-const io = socketIO(server, {
-  cors: { origin: "*" }
-});
-
-app.use(express.static(path.join(__dirname, "../client")));
+// Cấu hình đường dẫn từ /Server trỏ ngược ra /Client
+const clientPath = path.join(__dirname, "../Client");
+app.use(express.static(clientPath));
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "../client/index.html"));
+    res.sendFile(path.join(clientPath, "index.html"));
 });
 
+// Nạp logic xử lý báo hiệu
 require("./socket")(io);
 
-const PORT = process.env.PORT || 8181;
-server.listen(PORT, () => {
-  console.log("SERVER RUNNING ON PORT", PORT);
+const PORT = 8181;
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`=== HỆ THỐNG VOIP ĐANG CHẠY ===`);
+    console.log(`Cổng: ${PORT}`);
+    console.log(`Thư mục Client: ${clientPath}`);
 });

@@ -1,78 +1,52 @@
 const users = {};
-const state = {}; 
-// IDLE | CALLING | RINGING | IN_CALL
+const state = {}; // IDLE | CALLING | RINGING | IN_CALL
 
 module.exports = io => {
   io.on("connection", socket => {
-    console.log("CONNECT", socket.id);
-
     socket.on("register", username => {
-      if (users[username]) {
-        socket.emit("register-fail", "USERNAME_EXISTS");
-        return;
-      }
+      if (users[username]) return socket.emit("register-fail");
       users[username] = socket.id;
       state[username] = "IDLE";
       socket.username = username;
       io.emit("users", Object.keys(users));
-      console.log("REGISTER", username);
+      console.log(`[HỆ THỐNG] Người dùng ${username} đã trực tuyến.`);
     });
 
     socket.on("call", ({ to, offer }) => {
       const from = socket.username;
-      console.log(`CALL ${from} -> ${to}`);
-      console.log("OFFER SDP\n", offer.sdp);
-
-      if (!users[to]) return;
-      if (state[to] !== "IDLE") {
-        io.to(users[from]).emit("busy", to);
-        return;
-      }
-
-      state[from] = "CALLING";
-      state[to] = "RINGING";
-
+      if (!users[to] || state[to] !== "IDLE") return socket.emit("busy");
+      state[from] = "CALLING"; state[to] = "RINGING";
+      console.log(`[SIGNALING] Offer từ ${from} tới ${to}`);
+      // In SDP ra Terminal để lấy dữ liệu làm báo cáo "Khung giao thức"
+      console.log("--- SDP OFFER DATA ---\n", offer.sdp.substring(0, 100) + "...");
       io.to(users[to]).emit("incoming-call", { from, offer });
     });
 
     socket.on("answer", ({ to, answer }) => {
-      const from = socket.username;
-      console.log(`ANSWER ${from} -> ${to}`);
-      console.log("ANSWER SDP\n", answer.sdp);
-
-      state[from] = "IN_CALL";
-      state[to] = "IN_CALL";
-
+      state[socket.username] = "IN_CALL"; state[to] = "IN_CALL";
+      console.log(`[SIGNALING] Answer từ ${socket.username} tới ${to}`);
       io.to(users[to]).emit("answer", { answer });
     });
 
     socket.on("ice", ({ to, ice }) => {
-      console.log(`ICE ${socket.username} -> ${to}`);
-      console.log(ice);
-      if (users[to]) io.to(users[to]).emit("ice", { ice });
-    });
-
-    socket.on("reject", to => {
-      console.log(`REJECT ${socket.username} -> ${to}`);
-      state[socket.username] = "IDLE";
-      state[to] = "IDLE";
-      if (users[to]) io.to(users[to]).emit("rejected");
+      if (users[to]) {
+        console.log(`[ICE] Trao đổi ứng viên kết nối tới ${to}`);
+        io.to(users[to]).emit("ice", { ice });
+      }
     });
 
     socket.on("hangup", to => {
-      console.log(`HANGUP ${socket.username} -> ${to}`);
       state[socket.username] = "IDLE";
       if (to) state[to] = "IDLE";
       if (users[to]) io.to(users[to]).emit("hangup");
     });
 
     socket.on("disconnect", () => {
-      const u = socket.username;
-      if (!u) return;
-      console.log("DISCONNECT", u);
-      delete users[u];
-      delete state[u];
-      io.emit("users", Object.keys(users));
+      if (socket.username) {
+        delete users[socket.username];
+        delete state[socket.username];
+        io.emit("users", Object.keys(users));
+      }
     });
   });
 };

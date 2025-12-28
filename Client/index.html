@@ -1,30 +1,27 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>WebRTC VoIP</title>
-  <style>
-    body { font-family: Arial; max-width: 420px; margin: auto; }
-    video { width: 100%; background: black; margin-top: 8px; }
-    div { padding: 6px; cursor: pointer; border-bottom: 1px solid #ddd; }
-  </style>
+    <meta charset="utf-8">
+    <title>WebRTC VoIP Report System</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f4f4f4; }
+        video { width: 45%; border: 2px solid #333; border-radius: 8px; background: #000; margin: 5px; }
+        #users button { margin: 5px; padding: 10px; cursor: pointer; }
+    </style>
 </head>
 <body>
+    <h2>Hệ Thống Thực Nghiệm VoIP</h2>
+    <input id="username" placeholder="Nhập tên của bạn">
+    <button onclick="login()">Đăng ký vào hệ thống</button>
+    
+    <div id="users"></div>
+    
+    <div>
+        <video id="localVideo" autoplay muted playsinline></video>
+        <video id="remoteVideo" autoplay playsinline></video>
+    </div>
 
-<input id="username" placeholder="username">
-<button onclick="login()">Login</button>
-
-<h4>Users</h4>
-<div id="users"></div>
-
-<h4>Peer: <span id="peer">---</span></h4>
-
-<video id="localVideo" autoplay muted playsinline></video>
-<video id="remoteVideo" autoplay playsinline></video>
-
-<button onclick="hangup()">Hangup</button>
-
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
