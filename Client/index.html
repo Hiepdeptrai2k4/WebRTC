@@ -1,40 +1,30 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>WebRTC Call</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <title>WebRTC VoIP</title>
   <style>
-    body { font-family: Arial; background:#f5f5f5 }
-    #loginBox, #callBox { max-width:400px; margin:30px auto; padding:20px; background:#fff; border-radius:8px }
-    #users div { padding:6px; cursor:pointer; border-bottom:1px solid #eee }
-    #users div:hover { background:#eee }
-    video { width:100%; background:black; margin-top:10px }
-    button { padding:10px; margin-top:10px; width:100% }
-    #hangupBtn { background:red; color:white }
+    body { font-family: Arial; max-width: 420px; margin: auto; }
+    video { width: 100%; background: black; margin-top: 8px; }
+    div { padding: 6px; cursor: pointer; border-bottom: 1px solid #ddd; }
   </style>
 </head>
 <body>
 
-<div id="loginBox">
-  <h3>Đăng nhập</h3>
-  <input id="username" placeholder="Nhập tên" />
-  <button onclick="login()">Vào</button>
-</div>
+<input id="username" placeholder="username">
+<button onclick="login()">Login</button>
 
-<div id="callBox" style="display:none">
-  <h3>Online</h3>
-  <div id="users"></div>
+<h4>Users</h4>
+<div id="users"></div>
 
-  <h4>Đang gọi với: <span id="peerName">---</span></h4>
+<h4>Peer: <span id="peer">---</span></h4>
 
-  <video id="localVideo" autoplay muted></video>
-  <video id="remoteVideo" autoplay></video>
+<video id="localVideo" autoplay muted playsinline></video>
+<video id="remoteVideo" autoplay playsinline></video>
 
-  <button id="hangupBtn" onclick="hangup()">❌ Kết thúc cuộc gọi</button>
-</div>
+<button onclick="hangup()">Hangup</button>
 
-<script src="/socket.io/socket.io.js"></script> 
+<script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
